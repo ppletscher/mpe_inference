@@ -1,121 +1,109 @@
-#include "mex.h"
-#include "energy.h"
-#include "GCoptimization.h"
+#include <mex.h>
 #include <vector>
 #include <map>
+#include "energy.h"
+#include "GCoptimization.h"
 
-int idx_higher;
-int nEdges;
+// Input Arguments
 
-std::vector< std::map<int,int> >* edgeLookupPtr;
+#define POTENTIAL_UNARY_IN      prhs[0]
+#define EDGES_IN                prhs[1]
+#define POTENTIAL_PAIR_IN       prhs[2]
+#define NR_IN                   3
+#define NR_IN_OPT               0
 
-double* smoothStandard;
-double* smoothHigher;
+// Output Arguments
 
-double* edgeWeight;
+#define LABEL_OUT               plhs[0]
+#define ENERGY_OUT              plhs[1]
+#define NR_OUT                  1
+#define NR_OUT_OPT              1
+
+double* potential_pair;
+std::vector< std::map<int,int> >* edge_lookup_ptr;
+size_t num_edges;
 
 double smoothCost(int s1, int s2, int l1, int l2)
 {
-    if ((s1 == idx_higher) || (s2 == idx_higher)) {
-        if (s2==idx_higher) {
-            return smoothHigher[l1+l2*2];
-        }
-        else {
-            return smoothHigher[l2+l1*2];
-        }
+    std::map<int,int>::iterator it;
+    it = (*edge_lookup_ptr)[s1].find(s2);
+    if (it == (*edge_lookup_ptr)[s1].end()) {
+        mexErrMsgTxt("An error occurred during the lookup!\n");
+    }
+    int e_idx = it->second;
+    if (e_idx >= num_edges) {
+        mexErrMsgTxt("Exceeding number of edges!\n");
+    }
+
+    // smaller index changes the fastest (only matters for non-symmetric
+    // potentials)
+    if (s1 < s2) {
+        return potential_pair[e_idx*4+l1+l2*2];
     }
     else {
-        std::map<int,int>::iterator it;
-        it = (*edgeLookupPtr)[s1].find(s2);
-        if (it == (*edgeLookupPtr)[s1].end()) {
-            mexErrMsgTxt("An error occurred during the lookup!\n");
-        }
-        int e_idx = it->second;
-        if (e_idx >= nEdges) {
-            //mexPrintf("s1: %d, s2: %d, e_idx: %d.\n", s1, s2, e_idx);
-            //for (it = (*edgeLookupPtr)[s1].begin(); it != (*edgeLookupPtr)[s1].end(); ++it) {
-            //    mexPrintf("%d, %d.\n", it->first, it->second);
-            //}
-            mexErrMsgTxt("Exceeding number of edges!\n");
-        }
-
-        if (edgeWeight[e_idx] < 0) {
-            //mexPrintf("smoothCost: weight is negative! e_idx: %d.\n", e_idx);
-            mexErrMsgTxt("smoothCost: weight is negative!");
-        }
-
-        // TODO: check orientation! -> doesn't matter as symmetric!
-        return smoothStandard[l1+l2*2]*edgeWeight[e_idx];
+        return potential_pair[e_idx*4+l2+l1*2];
     }
 }
 
 
-void mexFunction(int nlhs, mxArray *plhs[], int nrhs,
-                 const mxArray *prhs[])
+void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
-    if(!(nrhs == 5 || nrhs == 4))
-        mexErrMsgTxt("4 or 5 input parameters required!");
-    if(mxGetM(prhs[0]) != 2 || mxGetM(prhs[1]) != 2 || mxGetM(prhs[2]) != 1 || mxGetM(prhs[3]) != 2 || mxGetN(prhs[3]) != 2)
-        mexErrMsgTxt("Inconsistent input size!");
+    // Check for proper number of arguments
+    if ( (nrhs < NR_IN) || (nrhs > NR_IN + NR_IN_OPT) || \
+            (nlhs < NR_OUT) || (nlhs > NR_OUT + NR_OUT_OPT) ) {
+        mexErrMsgTxt("Wrong number of arguments.");
+    }
+
+    // dimensionality checks
+    size_t num_nodes = mxGetN(POTENTIAL_UNARY_IN);
+    num_edges = mxGetN(EDGES_IN);
+    if ( mxGetM(POTENTIAL_UNARY_IN) != 2 ) {
+        mexErrMsgTxt("Only support binary problems!");
+    }
+    if ( mxGetM(EDGES_IN) != 2 ) {
+        mexErrMsgTxt("Edges array has wrong size!");
+    }
+    if ( (mxGetM(POTENTIAL_PAIR_IN) != 4) || (mxGetN(POTENTIAL_PAIR_IN) != num_edges) ) {
+        mexErrMsgTxt("Inconsistent size of the pairwise potentials.");
+    }
+
+    // read the inputs
+    double* potential_unary = mxGetPr(POTENTIAL_UNARY_IN);
+    double* edges = mxGetPr(EDGES_IN); // TODO: convert to int32? Or require it to be int32??
+    potential_pair = mxGetPr(POTENTIAL_PAIR_IN);
             
-    int nNodes = mxGetN(prhs[0]);
-    nEdges = mxGetN(prhs[1]);
-
-    double *nodeData = mxGetPr(prhs[0]);
-    double *nodeEdge = mxGetPr(prhs[1]);
-    edgeWeight = mxGetPr(prhs[2]);
-    smoothStandard = mxGetPr(prhs[3]);
-    if (nrhs > 4) {
-        smoothHigher = mxGetPr(prhs[4]);
-    }
-
-    GCoptimizationGeneralGraph* gco = new GCoptimizationGeneralGraph(nNodes, 2);
-
-    gco->setDataCost(nodeData);
-    
+    // unaries and function pointer for the pairwise
+    GCoptimizationGeneralGraph* gco = new GCoptimizationGeneralGraph(num_nodes, 2);
+    gco->setDataCost(potential_unary);
     gco->setSmoothCost(&smoothCost);
-    
-    if (nrhs == 5) {
-        idx_higher = nNodes-1;
-    }
-    else {
-        idx_higher = -1;
-    }
 
-    //mexPrintf("idx_higher: %d\n", idx_higher); 
-    std::vector< std::map<int,int> > edgeLookup;
-    edgeLookup.resize(nNodes);
-    edgeLookupPtr = &edgeLookup;
-    for (int i = 0; i < (int)(nEdges); i++) {
-        int s = int(nodeEdge[2*i])-1;
-        int d = int(nodeEdge[2*i+1])-1;
+    // an edge lookup table for the pairwise potentials (for within smoothcost)
+    std::vector< std::map<int,int> > edge_lookup;
+    edge_lookup.resize(num_nodes);
+    edge_lookup_ptr = &edge_lookup;
+    for (int i = 0; i < (int)(num_edges); i++) {
+        int s = int(edges[2*i])-1;
+        int d = int(edges[2*i+1])-1;
 
         gco->setNeighbors(s, d);
-
-        if ((s != idx_higher) && (d != idx_higher)) {
-            edgeLookup[s].insert(std::make_pair(d,i));
-            edgeLookup[d].insert(std::make_pair(s,i));
-        }
-        if ((i < idx_higher) && (edgeWeight[i] < 0)) {
-            mexErrMsgTxt("negative weights not allowed!\n");
-        }
+        edge_lookup[s].insert(std::make_pair(d,i));
+        edge_lookup[d].insert(std::make_pair(s,i));
     }
-    //mexPrintf("numEdges: %d.\n", (int)(nEdges));
 
+    // solve the graphcut problem
     double energy = gco->expansion(1);
 
+    // return the labeling and the energy
     double *ptr;
-    if(nlhs > 1)
-    {
-        plhs[1] = mxCreateDoubleMatrix(1, 1, mxREAL);
-        ptr = mxGetPr(plhs[1]);
+    if (nlhs > 1) {
+        ENERGY_OUT = mxCreateDoubleMatrix(1, 1, mxREAL);
+        ptr = mxGetPr(ENERGY_OUT);
         *ptr = energy;
     }
 
-    plhs[0] = mxCreateDoubleMatrix(1, nNodes, mxREAL);
-    ptr = mxGetPr(plhs[0]);    
-    
-    for(size_t i = 0; i < nNodes; i++) {
+    LABEL_OUT = mxCreateDoubleMatrix(1, num_nodes, mxREAL);
+    ptr = mxGetPr(LABEL_OUT);    
+    for(size_t i = 0; i < num_nodes; i++) {
         ptr[i] = gco->whatLabel(i);
     }
 
