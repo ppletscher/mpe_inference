@@ -88,6 +88,11 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         gco->setNeighbors(s, d);
         edge_lookup[s].insert(std::make_pair(d,i));
         edge_lookup[d].insert(std::make_pair(s,i));
+
+        // submodularity check
+        if (potential_pair[i*4]+potential_pair[i*4+3] > potential_pair[i*4+1]+potential_pair[i*4+2]) {
+            mexErrMsgTxt("The energy is not submodular!");
+        }
     }
 
     // solve the graphcut problem

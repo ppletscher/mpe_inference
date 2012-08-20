@@ -1,6 +1,6 @@
 - fix compile warnings
-- more unit tests
+- unify the two wrappers in some way
 
-- unify the two wrappers?
+- documentation (edges start with 1!)
 
-- add support for TRWS?
+- add support for TRWS? (we already have a wrapper for this!)
