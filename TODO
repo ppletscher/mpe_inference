@@ -1,6 +1,3 @@
 - fix compile warnings
-- unify the two wrappers in some way
-
 - documentation (edges start with 1!)
-
-- add support for TRWS? (we already have a wrapper for this!)
+- add support for TRWS
