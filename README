@@ -1,7 +1,8 @@
-simple MEX wrapper to perform MAP inference for binary energies and pairwise
-graphs. The code for the actual inference is written by other people and you
-should consult the corresponding READMEs for questions about the copyright or
-how to appropriately cite their works in any publications.
+simple MEX wrapper to perform MAP (sometimes also called MPE, for most probable
+explanation) inference for binary energies and pairwise graphs. The code for
+the actual inference is written by other people and you should consult the
+corresponding READMEs for questions about the copyright or how to
+appropriately cite their works in any of your publications.
 
 Algorithms packaged:
 * Boykov-Kolmogorov max-flow
