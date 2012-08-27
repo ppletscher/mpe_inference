@@ -5,5 +5,5 @@ corresponding READMEs for questions about the copyright or how to
 appropriately cite their works in any of your publications.
 
 Algorithms packaged:
-* Boykov-Kolmogorov max-flow
-* Incremental Breadth-First Search
+* Boykov-Kolmogorov Maximum flow
+* Maximum Flow byIncremental Breadth-First Search
